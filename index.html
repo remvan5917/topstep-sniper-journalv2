@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Topstep Sniper Suite</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/11.0.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/11.0.2/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore-compat.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
+        body { font-family: 'Inter', sans-serif; background-color: #020408; color: #e2e8f0; }
+        .animate-fadeIn { animation: fadeIn 0.4s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        ::-webkit-scrollbar { height: 4px; width: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 10px; }
+    </style>
+</head>
+<body>
+    <div id="app" class="min-h-screen flex flex-col p-2 lg:p-6">
+        <div class="flex items-center justify-center h-screen">
+            <div class="text-amber-500 font-black animate-pulse uppercase tracking-[0.3em]">Initialisation du Terminal Sniper...</div>
+        </div>
+    </div>
+
+    <script>
+        // CONFIGURATION
+        const firebaseConfig = JSON.parse(window.__firebase_config || '{}');
+        const appId = window.__app_id || 'topstep-sniper-journal';
+
+        // Initialisation Firebase
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+
+        // État de l'application
+        let state = {
+            user: null,
+            activeTab: 'home',
+            startingCapital: 50000,
+            tradeLogs: [],
+            isSyncing: false,
+            checklist: [
+                { id: 1, text: "M30 : Direction Jaune/Gris (Pas de Bleu)", status: false, category: "CONTEXTE" },
+                { id: 2, text: "IDCM : Pas de sur-achat/vente extrême", status: false, category: "CONTEXTE" },
+                { id: 3, text: "M5 : Direction = M30 (Convergence)", status: false, category: "SIGNAL" },
+                { id: 4, text: "US RIDER (M5) : Label de force apparu", status: false, category: "SIGNAL" },
+                { id: 5, text: "VECTEUR DORÉ (M5) : Couleur confirmée", status: false, category: "SIGNAL" },
+                { id: 6, text: "SL : Placé derrière Vecteur Doré M5", status: false, category: "RISQUE" },
+            ],
+            tempPnl: "",
+            tempEmotions: "",
+            tempScreenshot: "",
+            expandedTrade: null
+        };
+
+        function render() {
+            const appDiv = document.getElementById('app');
+            appDiv.innerHTML = `
+                <header class="flex flex-col md:flex-row justify-between items-center mb-8 gap-6 border-b border-slate-800/50 pb-6">
+                    <div class="flex items-center gap-4">
+                        <div class="bg-amber-500 p-3 rounded-2xl shadow-lg shadow-amber-500/20 text-black">
+                            <i data-lucide="target"></i>
+                        </div>
+                        <div>
+                            <h1 class="text-xl font-black tracking-tighter text-white uppercase italic">Topstep <span class="text-amber-500">Sniper</span> Desk</h1>
+                            <div class="flex items-center gap-2">
+                                <p class="text-[10px] text-slate-500 font-bold uppercase tracking-[0.2em]">Console Cloud Consolidée</p>
+                                ${state.isSyncing ? '<i data-lucide="cloud" class="text-emerald-500 animate-pulse w-3 h-3"></i>' : ''}
+                            </div>
+                        </div>
+                    </div>
+                    <nav class="flex bg-slate-900/50 p-1 rounded-xl border border-slate-800 shadow-inner overflow-x-auto">
+                        ${['home', 'desk', 'performance'].map(tab => `
+                            <button onclick="setActiveTab('${tab}')" class="flex items-center gap-2 px-6 py-2 rounded-lg text-[10px] font-black uppercase transition-all whitespace-nowrap ${state.activeTab === tab ? 'bg-amber-500 text-black shadow-lg shadow-amber-500/20' : 'text-slate-500 hover:text-slate-300'}">
+                                <i data-lucide="${tab === 'home' ? 'home' : tab === 'desk' ? 'layout-dashboard' : 'bar-chart-3'}" class="w-3.5 h-3.5"></i> ${tab}
+                            </button>
+                        `).join('')}
+                    </nav>
+                </header>
+
+                <main class="flex-1 animate-fadeIn">
+                    ${renderTab()}
+                </main>
+
+                <footer class="mt-12 border-t border-slate-800 pt-6 text-center text-slate-700 text-[9px] font-black uppercase tracking-[0.4em] italic">
+                    Topstep Sniper Suite • Station de Performance Cloud • 2026
+                </footer>
+            `;
+            lucide.createIcons();
+        }
+
+        function renderTab() {
+            const stats = calculateStats();
+            if (state.activeTab === 'home') return renderHome(stats);
+            if (state.activeTab === 'desk') return renderDesk();
+            if (state.activeTab === 'performance') return renderPerformance(stats);
+        }
+
+        function renderHome(stats) {
+            return `
+                <div class="flex flex-col items-center justify-center max-w-5xl mx-auto w-full py-10">
+                    <div class="text-center mb-12">
+                        <div class="inline-flex items-center gap-2 bg-amber-500/10 border border-amber-500/30 px-4 py-1.5 rounded-full text-amber-500 text-[10px] font-black uppercase tracking-[0.3em] mb-4">
+                            <i data-lucide="zap" class="w-3.5 h-3.5 animate-pulse"></i> Session Prête
+                        </div>
+                        <h2 class="text-4xl lg:text-5xl font-black text-white uppercase italic tracking-tighter mb-4">Snipez avec <span class="text-amber-500">Précision</span></h2>
+                        <p class="text-slate-500 text-sm font-bold uppercase tracking-tighter leading-relaxed">Maîtrisez votre journal et gravissez les paliers Topstep.</p>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 w-full mb-12">
+                        ${[
+                            { label: "Balance Compte", value: `$${(Number(state.startingCapital) + stats.netProfit).toLocaleString()}`, icon: 'dollar-sign', color: 'amber' },
+                            { label: "Win Rate", value: `${stats.winRate.toFixed(1)}%`, icon: 'trending-up', color: 'emerald' },
+                            { label: "Trades Totaux", value: stats.totalTrades, icon: 'award', color: 'blue' }
+                        ].map(c => `
+                            <div class="bg-slate-900/30 border border-slate-800 p-8 rounded-[2.5rem] flex flex-col items-center text-center group hover:border-amber-500/30 transition-all">
+                                <div class="bg-slate-800 p-4 rounded-2xl mb-4 shadow-xl"><i data-lucide="${c.icon}" class="text-${c.color}-500 w-8 h-8"></i></div>
+                                <span class="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">${c.label}</span>
+                                <div class="text-3xl font-black text-white italic tracking-tighter font-mono">${c.value}</div>
+                            </div>
+                        `).join('')}
+                    </div>
+
+                    <div class="flex flex-col md:flex-row gap-4 w-full">
+                        <button onclick="setActiveTab('desk')" class="flex-1 bg-amber-500 hover:bg-amber-400 text-black p-6 rounded-[2rem] font-black uppercase text-xs flex items-center justify-center gap-3 transition-all shadow-xl shadow-amber-500/20 active:scale-95 group">
+                            Nouveau Trade <i data-lucide="arrow-right" class="w-5 h-5 group-hover:translate-x-1 transition-transform"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderDesk() {
+            return `
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 max-w-7xl mx-auto w-full">
+                    <div class="bg-slate-900/30 border border-slate-800 rounded-3xl p-8 shadow-2xl">
+                        <h2 class="text-lg font-black text-white flex items-center gap-3 mb-6 uppercase italic border-b border-slate-800 pb-4">
+                            <i data-lucide="shield-check" class="text-amber-500"></i> Validation Technique
+                        </h2>
+                        <div class="space-y-3">
+                            ${state.checklist.map(item => `
+                                <button onclick="toggleCheck(${item.id})" class="w-full flex items-center justify-between p-4 rounded-xl border transition-all duration-300 ${item.status ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 'bg-black/40 border-slate-800 text-slate-500 hover:border-slate-600'}">
+                                    <div class="flex flex-col items-start text-left">
+                                        <span class="text-[8px] font-black opacity-50 mb-1 tracking-widest">${item.category}</span>
+                                        <span class="text-xs font-bold uppercase tracking-tight">${item.text}</span>
+                                    </div>
+                                    <i data-lucide="${item.status ? 'check-circle-2' : 'circle'}" class="${item.status ? 'text-emerald-500' : 'opacity-20'} w-5 h-5"></i>
+                                </button>
+                            `).join('')}
+                        </div>
+                    </div>
+
+                    <div class="flex flex-col gap-6">
+                        <div class="bg-slate-900/30 border border-slate-800 rounded-3xl p-8 shadow-2xl">
+                            <h2 class="text-lg font-black text-white mb-6 uppercase italic border-b border-slate-800 pb-4">Journal de session</h2>
+                            <div class="space-y-4">
+                                <input type="number" oninput="state.tempPnl = this.value" value="${state.tempPnl}" placeholder="P&L NET ($)" class="w-full bg-black border border-slate-800 rounded-xl py-4 px-4 text-xs font-bold text-white focus:border-amber-500 outline-none transition-all placeholder:text-slate-700" />
+                                <textarea oninput="state.tempEmotions = this.value" placeholder="PSYCHOLOGIE DU TRADE..." rows="3" class="w-full bg-black border border-slate-800 rounded-xl py-4 px-4 text-xs font-bold text-white focus:border-amber-500 outline-none transition-all placeholder:text-slate-700 resize-none">${state.tempEmotions}</textarea>
+                                
+                                <div class="space-y-3">
+                                    <label class="flex flex-col items-center justify-center w-full h-32 border-2 border-slate-800 border-dashed rounded-2xl cursor-pointer bg-black/40 hover:bg-black/60 hover:border-amber-500/50 transition-all group overflow-hidden">
+                                        ${state.tempScreenshot ? 
+                                            `<img src="${state.tempScreenshot}" class="w-full h-full object-cover opacity-50" />` : 
+                                            `<div class="flex flex-col items-center justify-center pt-5 pb-6">
+                                                <i data-lucide="upload" class="text-slate-600 mb-2 group-hover:text-amber-500 transition-transform"></i>
+                                                <p class="text-[10px] font-black text-slate-500 uppercase tracking-widest">Importer capture</p>
+                                            </div>`
+                                        }
+                                        <input type="file" class="hidden" accept="image/*" onchange="handleImage(this)" />
+                                    </label>
+                                </div>
+                                
+                                <button onclick="saveTrade()" class="w-full p-6 bg-emerald-500 text-black font-black rounded-2xl shadow-xl shadow-emerald-500/20 uppercase text-xs flex flex-col items-center mt-4 active:scale-95">
+                                    <i data-lucide="save" class="mb-1"></i> Archiver sur le Cloud
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderPerformance(stats) {
+            return `
+                <div class="space-y-8 max-w-7xl mx-auto w-full">
+                    <div class="bg-slate-900/30 border border-slate-800 p-6 rounded-3xl flex items-center justify-between shadow-xl">
+                        <div class="flex items-center gap-4">
+                            <div class="bg-amber-500/10 p-3 rounded-2xl text-amber-500"><i data-lucide="settings"></i></div>
+                            <div>
+                                <h3 class="text-sm font-black text-white uppercase italic">Capital Initial</h3>
+                                <p class="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Base de compte Topstep</p>
+                            </div>
+                        </div>
+                        <input type="number" value="${state.startingCapital}" onchange="updateCapital(this.value)" class="bg-black border border-slate-800 rounded-xl py-3 px-4 text-xs font-bold text-white focus:border-amber-500 outline-none w-32" />
+                    </div>
+
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div class="bg-slate-900/40 border border-slate-800 p-6 rounded-3xl shadow-xl">
+                            <span class="text-[10px] font-black text-slate-500 uppercase block mb-2 tracking-widest">Win Rate</span>
+                            <div class="text-2xl font-black text-white">${stats.winRate.toFixed(1)}%</div>
+                        </div>
+                        <div class="bg-slate-900/40 border border-slate-800 p-6 rounded-3xl shadow-xl">
+                            <span class="text-[10px] font-black text-slate-500 uppercase block mb-2 tracking-widest">P&L Net</span>
+                            <div class="text-2xl font-black ${stats.netProfit >= 0 ? 'text-emerald-500' : 'text-rose-500'} italic">$${stats.netProfit.toLocaleString()}</div>
+                        </div>
+                        <div class="bg-slate-900/40 border border-slate-800 p-6 rounded-3xl shadow-xl">
+                            <span class="text-[10px] font-black text-slate-500 uppercase block mb-2 tracking-widest">Trades</span>
+                            <div class="text-2xl font-black text-white">${stats.totalTrades}</div>
+                        </div>
+                        <div class="bg-slate-900/40 border border-slate-800 p-6 rounded-3xl shadow-xl">
+                            <span class="text-[10px] font-black text-slate-500 uppercase block mb-2 tracking-widest">Profit Factor</span>
+                            <div class="text-2xl font-black text-amber-500">${stats.profitFactor}</div>
+                        </div>
+                    </div>
+
+                    <div class="bg-slate-900/30 border border-slate-800 rounded-3xl p-8 overflow-hidden shadow-2xl">
+                        <h2 class="text-xl font-black text-white flex items-center gap-3 uppercase italic mb-8 border-b border-slate-800 pb-4">
+                            <i data-lucide="history" class="text-amber-500"></i> Historique Consolidé
+                        </h2>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse">
+                                <thead>
+                                    <tr class="border-b border-slate-800 text-[10px] text-slate-500 uppercase font-black tracking-widest">
+                                        <th class="pb-4 w-8"></th>
+                                        <th class="pb-4">Date</th>
+                                        <th class="pb-4 text-center">Score</th>
+                                        <th className="pb-4 text-center">Capture</th>
+                                        <th class="pb-4 text-right">P&L ($)</th>
+                                        <th class="pb-4 text-right pr-4">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="text-xs">
+                                    ${state.tradeLogs.length === 0 ? '<tr><td colspan="6" class="py-10 text-center text-slate-600 font-bold uppercase tracking-[0.4em]">Aucun trade archivé</td></tr>' : ''}
+                                    ${state.tradeLogs.map(trade => `
+                                        <tr class="border-b border-slate-800/50 hover:bg-white/5 transition-colors">
+                                            <td class="py-4">
+                                                <button onclick="toggleExpand('${trade.id}')" class="p-1 text-slate-600 hover:text-white transition-colors">
+                                                    <i data-lucide="${state.expandedTrade === trade.id ? 'chevron-up' : 'chevron-down'}" class="w-4 h-4"></i>
+                                                </button>
+                                            </td>
+                                            <td class="py-4 font-mono text-slate-400">${trade.timestamp ? new Date(trade.timestamp.seconds * 1000).toLocaleDateString() : 'Sync...'}</td>
+                                            <td class="py-4 text-center font-bold text-amber-500">${trade.checklistStatus}/6</td>
+                                            <td class="py-4 text-center">
+                                                ${trade.screenshotData ? `<img src="${trade.screenshotData}" class="w-8 h-8 object-cover rounded mx-auto border border-slate-700" />` : '<span class="opacity-20">-</span>'}
+                                            </td>
+                                            <td class="py-4 text-right font-mono font-black ${trade.pnl >= 0 ? 'text-emerald-500' : 'text-rose-500'}">$${trade.pnl.toLocaleString()}</td>
+                                            <td class="py-4 text-right pr-2">
+                                                <button onclick="deleteTrade('${trade.id}')" class="p-2 text-slate-800 hover:text-rose-500 transition-all">
+                                                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                        ${state.expandedTrade === trade.id ? `
+                                            <tr class="bg-black/40">
+                                                <td colspan="6" class="p-6">
+                                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                        <div>
+                                                            <h4 class="text-[10px] font-black text-slate-400 uppercase italic mb-2 tracking-widest flex items-center gap-2"><i data-lucide="message-square" class="w-3 h-3"></i> Psychologie & Notes</h4>
+                                                            <p class="text-xs text-slate-300 italic leading-relaxed whitespace-pre-wrap">${trade.emotions || "Aucune note."}</p>
+                                                        </div>
+                                                        ${trade.screenshotData ? `<div class="rounded-xl overflow-hidden border border-slate-800 shadow-2xl"><img src="${trade.screenshotData}" class="w-full h-auto" /></div>` : ''}
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ` : ''}
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Logique de données
+        function setActiveTab(tab) { state.activeTab = tab; render(); }
+        function toggleExpand(id) { state.expandedTrade = state.expandedTrade === id ? null : id; render(); }
+        
+        function toggleCheck(id) { 
+            state.checklist = state.checklist.map(i => i.id === id ? {...i, status: !i.status} : i); 
+            render(); 
+        }
+
+        function calculateStats() {
+            const total = state.tradeLogs.length;
+            const wins = state.tradeLogs.filter(t => Number(t.pnl) > 0);
+            const net = state.tradeLogs.reduce((acc, t) => acc + Number(t.pnl), 0);
+            const grossProfit = wins.reduce((acc, t) => acc + Number(t.pnl), 0);
+            const losses = state.tradeLogs.filter(t => Number(t.pnl) < 0);
+            const grossLoss = Math.abs(losses.reduce((acc, t) => acc + Number(t.pnl), 0));
+            return {
+                totalTrades: total,
+                winRate: total > 0 ? (wins.length / total) * 100 : 0,
+                netProfit: net,
+                profitFactor: grossLoss > 0 ? (grossProfit / grossLoss).toFixed(2) : (grossProfit > 0 ? "INF" : "0.00")
+            };
+        }
+
+        async function handleImage(input) {
+            const file = input.files[0];
+            if (!file) return;
+            if (file.size > 800000) { alert("Image trop lourde (max 800Ko)"); return; }
+            const reader = new FileReader();
+            reader.onloadend = () => { state.tempScreenshot = reader.result; render(); };
+            reader.readAsDataURL(file);
+        }
+
+        async function updateCapital(val) {
+            state.startingCapital = Number(val);
+            if (state.user) {
+                await db.collection('artifacts').doc(appId).collection('users').doc(state.user.uid).collection('settings').doc('account').set({ startingCapital: state.startingCapital });
+            }
+            render();
+        }
+
+        async function saveTrade() {
+            if (!state.tempPnl || !state.user) return;
+            state.isSyncing = true; render();
+            try {
+                await db.collection('artifacts').doc(appId).collection('users').doc(state.user.uid).collection('trades').add({
+                    pnl: Number(state.tempPnl),
+                    emotions: state.tempEmotions,
+                    screenshotData: state.tempScreenshot,
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                    checklistStatus: state.checklist.filter(i => i.status).length
+                });
+                state.tempPnl = ""; state.tempEmotions = ""; state.tempScreenshot = "";
+                state.checklist.forEach(i => i.status = false);
+                state.activeTab = 'performance';
+            } catch (e) { console.error(e); }
+            state.isSyncing = false;
+            render();
+        }
+
+        async function deleteTrade(id) {
+            if (!state.user) return;
+            await db.collection('artifacts').doc(appId).collection('users').doc(state.user.uid).collection('trades').doc(id).delete();
+        }
+
+        // Authentification et démarrage
+        auth.signInAnonymously().then(() => {
+            auth.onAuthStateChanged(user => {
+                if (user) {
+                    state.user = user;
+                    // Écouter les trades
+                    db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('trades')
+                      .onSnapshot(snap => {
+                        state.tradeLogs = snap.docs.map(d => ({id: d.id, ...d.data()}));
+                        render();
+                      }, err => console.error(err));
+                    
+                    // Écouter le capital (Correction : doc.exists est une propriété en Compat SDK)
+                    db.collection('artifacts').doc(appId).collection('users').doc(user.uid).collection('settings').doc('account')
+                      .onSnapshot(doc => {
+                        if (doc.exists) { 
+                            state.startingCapital = doc.data().startingCapital; 
+                            render(); 
+                        }
+                      }, err => console.error(err));
+                }
+            });
+        });
+
+        window.onload = render;
+    </script>
+</body>
+</html>
