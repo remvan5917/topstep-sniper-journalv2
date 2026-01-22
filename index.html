@@ -28,15 +28,21 @@
     </div>
 
     <script>
-        // CONFIGURATION
-        const firebaseConfig = JSON.parse(window.__firebase_config || '{}');
-        const appId = window.__app_id || 'topstep-sniper-journal';
-
-        // Initialisation Firebase
-        firebase.initializeApp(firebaseConfig);
-        const auth = firebase.auth();
-        const db = firebase.firestore();
-
+// CONFIGURATION FIREBASE
+            const firebaseConfig = {
+              apiKey: "AIzaSyA9oTG8YCTwYrp6apiirCvefst-6kuyFtk",
+              authDomain: "topste-sniper-journalv2.firebaseapp.com",
+              projectId: "topste-sniper-journalv2",
+              storageBucket: "topste-sniper-journalv2.firebasestorage.app",
+              messagingSenderId: "109480561609",
+              appId: "1:109480561609:web:f6cc7b649ffc039728f618",
+              measurementId: "G-T1FDXHBSGJ"
+            };
+            
+            // Initialisation Firebase
+            firebase.initializeApp(firebaseConfig);
+            const auth = firebase.auth();
+            const db = firebase.firestore();
         // État de l'application
         let state = {
             user: null,
