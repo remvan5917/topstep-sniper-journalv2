@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>topstepp Sniper Suite - Stable V4</title>
+    <title>Topstep Sniper Suite - Stable V4.1</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <!-- Firebase SDK (Version Compat) -->
@@ -50,23 +50,22 @@
         <main id="main-content" class="min-h-[60vh] pb-20"></main>
 
         <footer class="border-t border-slate-800 pt-6 text-center text-slate-700 text-[9px] font-black uppercase tracking-[0.4em] italic pb-8">
-            topstepp Sniper Suite • Station Cloud v4.0
+            Topstep Sniper Suite • Station Cloud v4.1
         </footer>
     </div>
 
     <script>
-        // --- CONFIGURATION ---
+        // --- CONFIGURATION FIREBASE ---
         const firebaseConfig = {
             apiKey: "AIzaSyA9oTG8YCTwYrp6apiirCvefst-6kuyFtk",
-            45
-                : "topstep-sniper-journalv2.firebaseapp.com",
+            authDomain: "topstep-sniper-journalv2.firebaseapp.com",
             projectId: "topstep-sniper-journalv2",
             storageBucket: "topstep-sniper-journalv2.firebasestorage.app",
             messagingSenderId: "109480561609",
             appId: "1:109480561609:web:f6cc7b649ffc039728f618",
             measurementId: "G-T1FDXHBSGJ"
         };
-        const APP_ID = "topstep-sniper-journalv2";
+        const APP_ID = "topste-sniper-journalv2";
         
         let db, auth;
         let state = {
@@ -230,7 +229,9 @@
                     </div>
                 `;
             } else if (state.activeTab === 'desk') {
+                // IMPORTANT: Correction de la condition d'affichage du bouton
                 const isReady = state.form.checklist.every(i => i.status) && state.form.pnl && state.user;
+                
                 html = `
                     <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 max-w-7xl mx-auto">
                         <div class="glass p-8 rounded-[3rem] border border-white/5 shadow-2xl">
@@ -257,9 +258,12 @@
                                         ${state.form.screenshot ? `<img src="${state.form.screenshot}" class="w-full h-full object-cover" />` : `<div class="flex flex-col items-center"><i data-lucide="upload" class="text-slate-600 mb-2 w-6 h-6"></i><span class="text-[10px] font-black text-slate-500 uppercase">Capture Graphique</span></div>`}
                                         <input type="file" class="hidden" accept="image/*" onchange="handleImage(this)" />
                                     </label>
-                                    <button onclick="saveTrade()" class="${isReady ? 'bg-amber-500 text-black' : 'bg-slate-800 text-slate-600 cursor-not-allowed'} w-full px-8 py-4 rounded-2xl font-black uppercase text-xs transition-all" ${isReady ? '' : 'disabled'}"> class="w-full p-6 ${isReady ? 'bg-emerald-500 text-black shadow-lg hover:scale-[1.02]' : 'bg-slate-800 text-slate-600 cursor-not-allowed'} font-black rounded-[2rem] uppercase text-xs mt-4 transition-all">
-                                        ${state.isSyncing ? 'Enregistrement...' : 'Archiver le Snipe'}
+                                    
+                                    <!-- BOUTON CORRIGÉ -->
+                                    <button onclick="saveTrade()" ${!isReady ? 'disabled' : ''} class="w-full p-6 font-black rounded-[2rem] uppercase text-xs mt-4 transition-all ${isReady ? 'bg-emerald-500 text-black shadow-lg hover:scale-[1.02] cursor-pointer' : 'bg-slate-800 text-slate-600 cursor-not-allowed opacity-50'}">
+                                        ${state.isSyncing ? 'Enregistrement en cours...' : 'Archiver le Snipe'}
                                     </button>
+
                                 </div>
                             </div>
                         </div>
