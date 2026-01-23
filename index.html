@@ -257,7 +257,7 @@
                                         ${state.form.screenshot ? `<img src="${state.form.screenshot}" class="w-full h-full object-cover" />` : `<div class="flex flex-col items-center"><i data-lucide="upload" class="text-slate-600 mb-2 w-6 h-6"></i><span class="text-[10px] font-black text-slate-500 uppercase">Capture Graphique</span></div>`}
                                         <input type="file" class="hidden" accept="image/*" onchange="handleImage(this)" />
                                     </label>
-                                    <button onclick="saveTrade()" class="w-full p-6 ${isReady ? 'bg-emerald-500 text-black shadow-lg hover:scale-[1.02]' : 'bg-slate-800 text-slate-600 cursor-not-allowed'} font-black rounded-[2rem] uppercase text-xs mt-4 transition-all">
+                                    <button onclick="saveTrade()" class="${isReady ? 'bg-amber-500 text-black' : 'bg-slate-800 text-slate-600 cursor-not-allowed'} w-full px-8 py-4 rounded-2xl font-black uppercase text-xs transition-all" ${isReady ? '' : 'disabled'}"> class="w-full p-6 ${isReady ? 'bg-emerald-500 text-black shadow-lg hover:scale-[1.02]' : 'bg-slate-800 text-slate-600 cursor-not-allowed'} font-black rounded-[2rem] uppercase text-xs mt-4 transition-all">
                                         ${state.isSyncing ? 'Enregistrement...' : 'Archiver le Snipe'}
                                     </button>
                                 </div>
