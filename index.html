@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Topstep Sniper Suite - Stable V4.1</title>
+    <title>Topstep Sniper Suite - V5 Finale</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <!-- Firebase SDK (Version Compat) -->
@@ -18,13 +18,15 @@
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 10px; }
         .tab-active { background-color: #f59e0b; color: #000; box-shadow: 0 4px 12px rgba(245, 158, 11, 0.2); }
-        .animate-pulse-fast { animation: pulse 1s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+        /* Styles pour l'état du bouton */
+        .btn-disabled { background-color: #1e293b; color: #475569; cursor: not-allowed; opacity: 0.5; }
+        .btn-active { background-color: #10b981; color: #000; cursor: pointer; box-shadow: 0 10px 15px -3px rgba(16, 185, 129, 0.3); transform: scale(1.02); }
     </style>
 </head>
-<body class="min-h-screen">
+<body class="min-h-screen pb-20">
     
     <div class="max-w-7xl mx-auto p-3 lg:p-6">
-        <!-- HEADER FIXE (Ne saute pas) -->
+        <!-- HEADER FIXE -->
         <header class="flex flex-col md:flex-row justify-between items-center mb-6 gap-6 border-b border-white/5 pb-6 sticky top-0 z-50 bg-[#020408]/95 backdrop-blur-md pt-4">
             <div class="flex items-center gap-5">
                 <div class="bg-amber-500 p-3.5 rounded-3xl text-black gold-glow">
@@ -47,20 +49,20 @@
         </header>
 
         <!-- CONTENU DYNAMIQUE -->
-        <main id="main-content" class="min-h-[60vh] pb-20"></main>
+        <main id="main-content" class="min-h-[60vh]"></main>
 
-        <footer class="border-t border-slate-800 pt-6 text-center text-slate-700 text-[9px] font-black uppercase tracking-[0.4em] italic pb-8">
-            Topstep Sniper Suite • Station Cloud v4.1
+        <footer class="mt-12 border-t border-slate-800 pt-6 text-center text-slate-700 text-[9px] font-black uppercase tracking-[0.4em] italic">
+            Topstep Sniper Suite • Station Cloud v5.0
         </footer>
     </div>
 
     <script>
-        // --- CONFIGURATION FIREBASE ---
+        // --- CONFIGURATION CORRIGÉE (topste-) ---
         const firebaseConfig = {
             apiKey: "AIzaSyA9oTG8YCTwYrp6apiirCvefst-6kuyFtk",
-            authDomain: "topstep-sniper-journalv2.firebaseapp.com",
-            projectId: "topstep-sniper-journalv2",
-            storageBucket: "topstep-sniper-journalv2.firebasestorage.app",
+            authDomain: "topste-sniper-journalv2.firebaseapp.com",
+            projectId: "topste-sniper-journalv2",
+            storageBucket: "topste-sniper-journalv2.firebasestorage.app",
             messagingSenderId: "109480561609",
             appId: "1:109480561609:web:f6cc7b649ffc039728f618",
             measurementId: "G-T1FDXHBSGJ"
@@ -109,53 +111,90 @@
                 });
             } catch (e) {
                 console.error("Erreur Init:", e);
-                alert("Erreur de chargement Firebase. Vérifiez la console.");
             }
         }
 
         function loadUserData() {
             if (!state.user) return;
             const userId = state.user.uid;
-
-            // Écoute Trades
+            
             db.collection('artifacts').doc(APP_ID).collection('users').doc(userId).collection('trades')
               .onSnapshot(snap => {
                   state.trades = snap.docs.map(d => ({id: d.id, ...d.data()}))
                       .sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
-                  renderContent(true); // true = preserve scroll
+                  // On ne re-rend que si on est sur l'onglet performance ou home pour éviter de casser la saisie du desk
+                  if (state.activeTab !== 'desk') renderContent();
               });
 
-            // Écoute Capital
             db.collection('artifacts').doc(APP_ID).collection('users').doc(userId).collection('settings').doc('account')
               .onSnapshot(doc => {
                   if (doc.exists) {
                       state.startingCapital = doc.data().startingCapital;
-                      renderContent(true);
+                      if (state.activeTab === 'performance' || state.activeTab === 'home') renderContent();
                   }
               });
         }
 
-        // --- FONCTIONS LOGIQUES ---
+        // --- LOGIQUE UI INTELLIGENTE ---
         function changeTab(tab) {
             state.activeTab = tab;
-            renderContent(false); // Reset scroll quand on change d'onglet
+            renderContent();
         }
 
         function toggleCheck(id) {
             state.form.checklist = state.form.checklist.map(i => i.id === id ? {...i, status: !i.status} : i);
-            renderContent(true); // Garde le scroll
+            // On met à jour l'icone visuellement sans recharger tout le HTML
+            const btnIcon = document.getElementById(`check-icon-${id}`);
+            const btnContainer = document.getElementById(`check-btn-${id}`);
+            if (btnIcon && btnContainer) {
+                const item = state.form.checklist.find(i => i.id === id);
+                if (item.status) {
+                    btnContainer.className = "w-full flex items-center justify-between p-5 rounded-2xl border transition-all bg-emerald-500/10 border-emerald-500/30 text-emerald-400";
+                    btnIcon.setAttribute('data-lucide', 'check-circle-2');
+                } else {
+                    btnContainer.className = "w-full flex items-center justify-between p-5 rounded-2xl border transition-all bg-black/40 border-slate-800 text-slate-500 hover:border-slate-600";
+                    btnIcon.setAttribute('data-lucide', 'circle');
+                }
+                lucide.createIcons();
+            }
+            checkValidation();
         }
 
-        function toggleExpand(id) {
-            state.expandedTrade = state.expandedTrade === id ? null : id;
-            renderContent(true);
+        function handleInput(field, value) {
+            state.form[field] = value;
+            checkValidation();
+        }
+
+        function checkValidation() {
+            const btn = document.getElementById('save-btn');
+            if (!btn) return;
+
+            const isChecklistComplete = state.form.checklist.every(i => i.status);
+            const isPnlFilled = state.form.pnl !== "";
+            const isReady = isChecklistComplete && isPnlFilled && state.user;
+
+            if (isReady) {
+                btn.disabled = false;
+                btn.className = "w-full p-6 font-black rounded-[2rem] uppercase text-xs mt-4 transition-all btn-active animate-pulse-fast";
+                btn.innerHTML = `<i data-lucide="save" class="inline w-4 h-4 mr-2"></i> ARCHIVER LE SNIPE`;
+            } else {
+                btn.disabled = true;
+                btn.className = "w-full p-6 font-black rounded-[2rem] uppercase text-xs mt-4 transition-all btn-disabled";
+                btn.innerHTML = `Complétez Checklist + PnL`;
+            }
+            lucide.createIcons();
         }
 
         function handleImage(input) {
             const file = input.files[0];
             if (!file) return;
             const reader = new FileReader();
-            reader.onloadend = () => { state.form.screenshot = reader.result; renderContent(true); };
+            reader.onloadend = () => { 
+                state.form.screenshot = reader.result;
+                // Petit hack pour montrer l'image sans recharger
+                const imgContainer = document.getElementById('img-preview');
+                if (imgContainer) imgContainer.innerHTML = `<img src="${reader.result}" class="w-full h-full object-cover opacity-80" />`;
+            };
             reader.readAsDataURL(file);
         }
 
@@ -168,7 +207,8 @@
         async function saveTrade() {
             if (!state.user || !state.form.pnl || state.isSyncing) return;
             state.isSyncing = true;
-            renderContent(true);
+            const btn = document.getElementById('save-btn');
+            if(btn) btn.innerText = "Synchronisation Cloud...";
 
             try {
                 await db.collection('artifacts').doc(APP_ID).collection('users').doc(state.user.uid).collection('trades').add({
@@ -180,35 +220,42 @@
                     type: state.form.checklist[0].status ? 'BUY' : 'SELL'
                 });
 
-                // Reset formulaire
+                // Reset
                 state.form.pnl = ""; state.form.emotions = ""; state.form.screenshot = "";
                 state.form.checklist.forEach(i => i.status = false);
                 state.activeTab = 'performance';
+                renderContent(); // Force render pour aller sur l'onglet performance
                 
             } catch (e) {
-                alert("Erreur de sauvegarde : " + e.message);
+                alert("Erreur : " + e.message);
+                state.isSyncing = false;
+                checkValidation(); // Restore button state
             } finally {
                 state.isSyncing = false;
-                renderContent(false); // Reset scroll pour voir le haut de l'historique
             }
         }
 
         async function deleteTrade(id) {
-            if (!state.user || !confirm("Supprimer ce snipe ?")) return;
+            if (!confirm("Supprimer ?")) return;
             await db.collection('artifacts').doc(APP_ID).collection('users').doc(state.user.uid).collection('trades').doc(id).delete();
+            // Le listener rechargera l'UI
         }
 
-        // --- MOTEUR DE RENDU ---
-        function renderContent(preserveScroll = false) {
-            const container = document.getElementById('main-content');
-            const scrollPos = window.scrollY; // Sauvegarde la position
+        function toggleExpand(id) {
+            state.expandedTrade = state.expandedTrade === id ? null : id;
+            renderContent();
+        }
 
-            // Mise à jour de la nav
+        // --- RENDU PRINCIPAL ---
+        function renderContent() {
+            const container = document.getElementById('main-content');
+            if (!container) return;
+
+            // Update Nav Classes
             document.querySelectorAll('.nav-btn').forEach(btn => btn.className = "nav-btn px-6 py-3 rounded-xl text-[10px] font-black uppercase transition-all text-slate-500 hover:text-slate-300");
             const activeBtn = document.getElementById(`nav-${state.activeTab}`);
             if (activeBtn) activeBtn.className = "nav-btn px-6 py-3 rounded-xl text-[10px] font-black uppercase transition-all tab-active";
 
-            // Calculs
             const wins = state.trades.filter(t => Number(t.pnl) > 0);
             const pnlNet = state.trades.reduce((acc, t) => acc + Number(t.pnl), 0);
             const winRate = state.trades.length > 0 ? (wins.length / state.trades.length * 100).toFixed(1) : 0;
@@ -217,8 +264,8 @@
 
             if (state.activeTab === 'home') {
                 html = `
-                    <div class="max-w-4xl mx-auto text-center py-12">
-                        <div class="inline-block bg-amber-500/10 border border-amber-500/20 px-4 py-2 rounded-full text-amber-500 text-[10px] font-black uppercase tracking-[0.3em] mb-8">M30 A+ Strategy</div>
+                    <div class="max-w-4xl mx-auto text-center py-12 animate-fadeIn">
+                        <div class="inline-block bg-amber-500/10 border border-amber-500/20 px-4 py-2 rounded-full text-amber-500 text-[10px] font-black uppercase tracking-[0.3em] mb-8">Setup M30 A+</div>
                         <h2 class="text-5xl lg:text-7xl font-black text-white italic tracking-tighter mb-8 leading-tight uppercase">Précision.<br/><span class="text-amber-500">Discipline. Profits.</span></h2>
                         <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
                             <div class="glass p-8 rounded-[2.5rem] border border-white/5"><div class="text-[10px] text-slate-500 font-bold uppercase mb-2">Balance</div><div class="text-3xl font-black italic tracking-tighter">$${(state.startingCapital + pnlNet).toLocaleString()}</div></div>
@@ -229,18 +276,16 @@
                     </div>
                 `;
             } else if (state.activeTab === 'desk') {
-                // IMPORTANT: Correction de la condition d'affichage du bouton
-                const isReady = state.form.checklist.every(i => i.status) && state.form.pnl && state.user;
-                
+                // Rendu initial du desk. Les mises à jour suivantes se feront via DOM direct pour éviter le saut.
                 html = `
-                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 max-w-7xl mx-auto">
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 max-w-7xl mx-auto animate-fadeIn">
                         <div class="glass p-8 rounded-[3rem] border border-white/5 shadow-2xl">
                             <h3 class="text-lg font-black text-white mb-8 italic uppercase border-b border-white/5 pb-4">Validation Sniper</h3>
                             <div class="space-y-3">
                                 ${state.form.checklist.map(item => `
-                                    <button onclick="toggleCheck(${item.id})" class="w-full flex items-center justify-between p-5 rounded-2xl border transition-all ${item.status ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 'bg-black/40 border-slate-800 text-slate-500 hover:border-slate-600'}">
+                                    <button id="check-btn-${item.id}" onclick="toggleCheck(${item.id})" class="w-full flex items-center justify-between p-5 rounded-2xl border transition-all ${item.status ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 'bg-black/40 border-slate-800 text-slate-500 hover:border-slate-600'}">
                                         <div class="text-left"><div class="text-[8px] font-black opacity-40 mb-1 uppercase">${item.cat}</div><div class="text-[11px] font-bold tracking-tight">${item.text}</div></div>
-                                        <i data-lucide="${item.status ? 'check-circle-2' : 'circle'}" class="w-5 h-5"></i>
+                                        <i id="check-icon-${item.id}" data-lucide="${item.status ? 'check-circle-2' : 'circle'}" class="w-5 h-5"></i>
                                     </button>
                                 `).join('')}
                             </div>
@@ -251,19 +296,18 @@
                                 <div class="space-y-5">
                                     <div class="bg-black/40 p-1 rounded-2xl border border-slate-800 flex items-center">
                                         <span class="pl-4 text-amber-500 font-black">$</span>
-                                        <input type="number" oninput="state.form.pnl = this.value" value="${state.form.pnl}" placeholder="P&L NET (EX: 250)" class="w-full bg-transparent p-4 text-xs font-black text-white outline-none" />
+                                        <input type="number" oninput="handleInput('pnl', this.value)" value="${state.form.pnl}" placeholder="P&L NET (EX: 250)" class="w-full bg-transparent p-4 text-xs font-black text-white outline-none" />
                                     </div>
-                                    <textarea oninput="state.form.emotions = this.value" placeholder="NOTES : CALME ? PATIENT ? FOMO ?" rows="3" class="w-full bg-black/40 border border-slate-800 rounded-2xl p-5 text-xs font-bold text-white outline-none focus:border-amber-500/50 transition-all font-bold italic">${state.form.emotions}</textarea>
-                                    <label class="flex flex-col items-center justify-center w-full h-36 border-2 border-slate-800 border-dashed rounded-[2.5rem] cursor-pointer bg-black/20 hover:bg-black/40 transition-all overflow-hidden relative">
-                                        ${state.form.screenshot ? `<img src="${state.form.screenshot}" class="w-full h-full object-cover" />` : `<div class="flex flex-col items-center"><i data-lucide="upload" class="text-slate-600 mb-2 w-6 h-6"></i><span class="text-[10px] font-black text-slate-500 uppercase">Capture Graphique</span></div>`}
+                                    <textarea oninput="handleInput('emotions', this.value)" placeholder="NOTES : CALME ? PATIENT ? FOMO ?" rows="3" class="w-full bg-black/40 border border-slate-800 rounded-2xl p-5 text-xs font-bold text-white outline-none focus:border-amber-500/50 transition-all font-bold italic">${state.form.emotions}</textarea>
+                                    
+                                    <label class="flex flex-col items-center justify-center w-full h-36 border-2 border-slate-800 border-dashed rounded-[2.5rem] cursor-pointer bg-black/20 hover:bg-black/40 transition-all overflow-hidden relative" id="img-preview">
+                                        ${state.form.screenshot ? `<img src="${state.form.screenshot}" class="w-full h-full object-cover opacity-80" />` : `<div class="flex flex-col items-center"><i data-lucide="upload" class="text-slate-600 mb-2 w-6 h-6"></i><span class="text-[10px] font-black text-slate-500 uppercase">Capture Graphique</span></div>`}
                                         <input type="file" class="hidden" accept="image/*" onchange="handleImage(this)" />
                                     </label>
                                     
-                                    <!-- BOUTON CORRIGÉ -->
-                                    <button onclick="saveTrade()" ${!isReady ? 'disabled' : ''} class="w-full p-6 font-black rounded-[2rem] uppercase text-xs mt-4 transition-all ${isReady ? 'bg-emerald-500 text-black shadow-lg hover:scale-[1.02] cursor-pointer' : 'bg-slate-800 text-slate-600 cursor-not-allowed opacity-50'}">
-                                        ${state.isSyncing ? 'Enregistrement en cours...' : 'Archiver le Snipe'}
+                                    <button id="save-btn" onclick="saveTrade()" disabled class="w-full p-6 font-black rounded-[2rem] uppercase text-xs mt-4 transition-all btn-disabled">
+                                        Complétez Checklist + PnL
                                     </button>
-
                                 </div>
                             </div>
                         </div>
@@ -271,7 +315,7 @@
                 `;
             } else if (state.activeTab === 'performance') {
                 html = `
-                    <div class="space-y-8">
+                    <div class="space-y-8 animate-fadeIn">
                         <div class="glass p-6 rounded-3xl flex items-center justify-between border border-white/5 shadow-lg">
                             <div class="flex items-center gap-4"><div class="bg-amber-500/10 p-3 rounded-2xl text-amber-500"><i data-lucide="settings"></i></div><div><h3 class="text-sm font-black text-white uppercase italic">Capital Initial</h3></div></div>
                             <input type="number" value="${state.startingCapital}" onchange="updateCapital(this.value)" class="bg-black border border-slate-800 rounded-xl p-3 text-xs font-black text-amber-500 outline-none w-32 text-center" />
@@ -303,16 +347,10 @@
 
             container.innerHTML = html;
             lucide.createIcons();
-
-            // Restaure la position de scroll si demandé (évite le saut)
-            if (preserveScroll) {
-                window.scrollTo(0, scrollPos);
-            } else {
-                window.scrollTo(0, 0);
-            }
+            // On appelle checkValidation pour mettre le bouton dans le bon état au chargement du desk
+            if (state.activeTab === 'desk') checkValidation();
         }
 
-        // Lance l'app
         initApp();
         renderContent();
     </script>
