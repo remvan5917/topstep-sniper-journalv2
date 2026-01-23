@@ -1,6 +1,6 @@
-<!DOCTYPE html>
+id="save-btn" onclick="saveTrade()" disabled<!DOCTYPE html>
 <html lang="fr">
-<head>
+<heid="save-btn" onclick="saveTrade()"ad>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Topstep Sniper Suite - V5 Finale</title>
@@ -347,6 +347,14 @@
 
             container.innerHTML = html;
             lucide.createIcons();
+            // Gérer l'état du bouton ARCHIVER
+const saveBtn = document.getElementById('save-btn');
+if (saveBtn && state.activeTab === 'desk') {
+const isReady = state.form.checklist.every(i => i.status) && state.form.pnl && state.user;
+saveBtn.disabled = !isReady;
+saveBtn.className = isReady ? 'w-full p-6 font-black rounded-[2rem] uppercase text-xs mt-4 transition-all bg-amber-500 text-black' : 'w-full p-6 font-black rounded-[2rem] uppercase text-xs mt-4 transition-all btn-disabled';
+saveBtn.textContent = isReady ? 'Archiver le Snipe' : 'Complétez Checklist + PNL';
+}
             // On appelle checkValidation pour mettre le bouton dans le bon état au chargement du desk
             if (state.activeTab === 'desk') checkValidation();
         }
